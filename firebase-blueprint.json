@@ -1,0 +1,399 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Private learner account profile.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "displayName": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "experienceBand": {
+          "type": "string",
+          "enum": ["student", "beginner", "junior", "intermediate", "advanced", "prefer_not_to_say"]
+        },
+        "accountStatus": {
+          "type": "string",
+          "enum": ["active", "restricted", "suspended", "pending_deletion"]
+        },
+        "onboardingCompleted": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "experienceBand", "accountStatus", "onboardingCompleted", "createdAt", "updatedAt"]
+    },
+    "PublicProfile": {
+      "title": "PublicProfile",
+      "description": "Opt-in community-safe profile fields without PII.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "displayName": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "bio": { "type": "string", "maxLength": 280 },
+        "interests": { "type": "array" },
+        "visibility": { "type": "string", "enum": ["private", "community"] },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "bio", "interests", "visibility", "updatedAt"]
+    },
+    "UserPreferences": {
+      "title": "UserPreferences",
+      "description": "Private learner goals and interests.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "goals": { "type": "array" },
+        "interests": { "type": "array" },
+        "preferredDifficulty": { "type": "string", "enum": ["beginner", "intermediate", "advanced"] },
+        "notificationsEnabled": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "goals", "interests", "preferredDifficulty", "notificationsEnabled", "updatedAt"]
+    },
+    "UserBlock": {
+      "title": "UserBlock",
+      "description": "Owner-managed user block record.",
+      "type": "object",
+      "properties": {
+        "ownerUid": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "blockedUid": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerUid", "blockedUid", "createdAt"]
+    },
+    "Domain": {
+      "title": "Domain",
+      "description": "Curated engineering learning domain.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "slug": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 120 },
+        "description": { "type": "string", "maxLength": 500 },
+        "order": { "type": "integer" },
+        "status": { "type": "string", "enum": ["draft", "published", "archived"] }
+      },
+      "required": ["id", "slug", "title", "description", "order", "status"]
+    },
+    "Scenario": {
+      "title": "Scenario",
+      "description": "Curated engineering discussion scenario.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "slug": { "type": "string", "maxLength": 128 },
+        "domainId": { "type": "string", "maxLength": 128 },
+        "domainTitle": { "type": "string", "maxLength": 120 },
+        "topicTitle": { "type": "string", "maxLength": 120 },
+        "title": { "type": "string", "maxLength": 200 },
+        "roomType": { "type": "string", "enum": ["discussion", "debate", "system_design", "debug", "code_review", "incident", "teach"] },
+        "difficulty": { "type": "string", "enum": ["beginner", "intermediate", "advanced"] },
+        "estimatedMinutes": { "type": "integer" },
+        "participationMode": { "type": "string", "enum": ["scheduled", "async", "both"] },
+        "context": { "type": "string", "maxLength": 2000 },
+        "prompt": { "type": "string", "maxLength": 2000 },
+        "constraints": { "type": "array" },
+        "learningObjectives": { "type": "array" },
+        "prerequisites": { "type": "array" },
+        "competencies": { "type": "array" },
+        "strongSignals": { "type": "array" },
+        "rubricVersion": { "type": "integer" },
+        "status": { "type": "string", "enum": ["draft", "published", "archived"] }
+      },
+      "required": ["id", "slug", "domainId", "title", "roomType", "difficulty", "rubricVersion", "status"]
+    },
+    "Session": {
+      "title": "Session",
+      "description": "Small-group engineering practice session.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "scenarioId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "scenarioSlug": { "type": "string", "maxLength": 128 },
+        "scenarioTitle": { "type": "string", "maxLength": 200 },
+        "roomType": { "type": "string", "enum": ["discussion", "debate", "system_design", "debug", "code_review", "incident", "teach"] },
+        "difficulty": { "type": "string", "enum": ["beginner", "intermediate", "advanced"] },
+        "title": { "type": "string", "minLength": 4, "maxLength": 120 },
+        "hostUid": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "hostDisplayName": { "type": "string", "maxLength": 60 },
+        "status": { "type": "string", "enum": ["draft", "open", "scheduled", "active", "paused", "completed", "cancelled"] },
+        "participationMode": { "type": "string", "enum": ["scheduled", "async"] },
+        "visibility": { "type": "string", "enum": ["public", "private"] },
+        "capacity": { "type": "integer" },
+        "participantCount": { "type": "integer" },
+        "participantUids": { "type": "array" },
+        "currentPhase": { "type": "string", "enum": ["introduction", "preparation", "initial_contributions", "cross_questioning", "open_discussion", "conclusion", "evaluation_pending", "evaluation_complete"] },
+        "phaseVersion": { "type": "integer" },
+        "sharedNotes": { "type": "string", "maxLength": 8000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "scenarioId", "title", "hostUid", "status", "participationMode", "visibility", "capacity", "participantCount", "participantUids", "currentPhase", "phaseVersion", "createdAt", "updatedAt"]
+    },
+    "SessionParticipant": {
+      "title": "SessionParticipant",
+      "description": "Membership record for a participant in a session.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "sessionId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "displayName": { "type": "string", "maxLength": 60 },
+        "role": { "type": "string", "enum": ["participant", "host", "moderator"] },
+        "status": { "type": "string", "enum": ["joined", "left", "removed"] },
+        "joinedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "sessionId", "displayName", "role", "status", "joinedAt"]
+    },
+    "SessionMessage": {
+      "title": "SessionMessage",
+      "description": "Discussion contribution or pass event inside a session.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "sessionId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "senderUid": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "senderDisplayName": { "type": "string", "maxLength": 60 },
+        "body": { "type": "string", "minLength": 1, "maxLength": 4000 },
+        "messageType": { "type": "string", "enum": ["text", "code", "system", "pass"] },
+        "phase": { "type": "string", "maxLength": 40 },
+        "clientMessageId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "sessionId", "senderUid", "senderDisplayName", "body", "messageType", "phase", "clientMessageId", "createdAt"]
+    },
+    "SessionEvent": {
+      "title": "SessionEvent",
+      "description": "Session interaction trail event.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "sessionId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "actorUid": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "eventType": { "type": "string", "maxLength": 60 },
+        "summary": { "type": "string", "maxLength": 300 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "sessionId", "actorUid", "eventType", "summary", "createdAt"]
+    },
+    "UserEvaluation": {
+      "title": "UserEvaluation",
+      "description": "Private post-session AI evaluation report.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "uid": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "sessionId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "scenarioId": { "type": "string", "maxLength": 128 },
+        "scenarioTitle": { "type": "string", "maxLength": 200 },
+        "rubricVersion": { "type": "integer" },
+        "promptVersion": { "type": "string", "maxLength": 40 },
+        "provider": { "type": "string", "maxLength": 40 },
+        "model": { "type": "string", "maxLength": 80 },
+        "status": { "type": "string", "enum": ["pending", "processing", "completed", "failed"] },
+        "flaggedForReview": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "uid", "sessionId", "scenarioId", "rubricVersion", "status", "flaggedForReview", "createdAt"]
+    },
+    "CompetencyObservation": {
+      "title": "CompetencyObservation",
+      "description": "Dated evidence observation for a single competency.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "uid": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "competencyKey": { "type": "string", "maxLength": 100 },
+        "sessionId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "evaluationId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "rating": { "type": "integer" },
+        "confidence": { "type": "string", "enum": ["low", "medium", "high"] },
+        "rubricVersion": { "type": "integer" },
+        "observedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "uid", "competencyKey", "sessionId", "evaluationId", "rating", "confidence", "rubricVersion", "observedAt"]
+    },
+    "UserReport": {
+      "title": "UserReport",
+      "description": "Safety/moderation report filed by a participant.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "reporterUid": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "targetUid": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "sessionId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "category": { "type": "string", "enum": ["harassment", "spam", "off_topic", "pii_exposure", "malicious_content", "other"] },
+        "details": { "type": "string", "minLength": 5, "maxLength": 1000 },
+        "status": { "type": "string", "enum": ["open", "under_review", "resolved", "dismissed"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "reporterUid", "targetUid", "sessionId", "category", "details", "status", "createdAt", "updatedAt"]
+    },
+    "AuditEvent": {
+      "title": "AuditEvent",
+      "description": "Append-only operational and moderation audit record.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "actorUid": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "action": { "type": "string", "maxLength": 100 },
+        "targetType": { "type": "string", "maxLength": 60 },
+        "targetId": { "type": "string", "maxLength": 128 },
+        "outcome": { "type": "string", "enum": ["allowed", "denied", "succeeded", "failed"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "actorUid", "action", "targetType", "targetId", "outcome", "createdAt"]
+    },
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Staff/admin role marker document.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "role": { "type": "string", "enum": ["admin", "moderator", "content_manager"] }
+      },
+      "required": ["uid", "role"]
+    },
+    "SessionWaitlist": {
+      "title": "SessionWaitlist",
+      "description": "Waitlist entry for a full session room.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "sessionId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "displayName": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "joinedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "sessionId", "displayName", "joinedAt"]
+    },
+    "ArenaSession": {
+      "title": "ArenaSession",
+      "description": "Private 1-on-1 or multi-perspective AI Practice Arena session.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "uid": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "scenarioId": { "type": "string", "maxLength": 128 },
+        "scenarioSlug": { "type": "string", "maxLength": 128 },
+        "scenarioTitle": { "type": "string", "maxLength": 200 },
+        "mode": { "type": "string", "enum": ["mentor", "interviewer", "challenger", "teach_back", "multi_perspective"] },
+        "activePersonas": { "type": "array" },
+        "status": { "type": "string", "enum": ["active", "completed"] },
+        "turnCount": { "type": "integer" },
+        "coachingNotes": { "type": "string", "maxLength": 4000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "uid", "scenarioId", "mode", "activePersonas", "status", "turnCount", "createdAt", "updatedAt"]
+    },
+    "ArenaMessage": {
+      "title": "ArenaMessage",
+      "description": "Message inside a private AI Practice Arena session.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "arenaId": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "uid": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "senderType": { "type": "string", "enum": ["learner", "ai"] },
+        "senderDisplayName": { "type": "string", "maxLength": 80 },
+        "body": { "type": "string", "minLength": 1, "maxLength": 4000 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "arenaId", "uid", "senderType", "senderDisplayName", "body", "createdAt"]
+    },
+    "SkillPassport": {
+      "title": "SkillPassport",
+      "description": "Opt-in shareable evidence-backed Developer Skill Passport.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "displayName": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "headline": { "type": "string", "maxLength": 120 },
+        "bio": { "type": "string", "maxLength": 280 },
+        "experienceBand": { "type": "string", "enum": ["student", "beginner", "junior", "intermediate", "advanced", "prefer_not_to_say"] },
+        "visibility": { "type": "string", "enum": ["private", "community"] },
+        "completedSessionsCount": { "type": "integer" },
+        "verifiedCompetencies": { "type": "array" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "headline", "bio", "experienceBand", "visibility", "completedSessionsCount", "verifiedCompetencies", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private learner account profile."
+    },
+    "/publicProfiles/{uid}": {
+      "schema": { "$ref": "#/entities/PublicProfile" },
+      "description": "Opt-in community-safe profile fields."
+    },
+    "/userPreferences/{uid}": {
+      "schema": { "$ref": "#/entities/UserPreferences" },
+      "description": "Private learner preferences and goals."
+    },
+    "/userBlocks/{uid}/blockedUsers/{blockedUid}": {
+      "schema": { "$ref": "#/entities/UserBlock" },
+      "description": "Owner-only list of blocked users."
+    },
+    "/domains/{domainId}": {
+      "schema": { "$ref": "#/entities/Domain" },
+      "description": "Published learning domains."
+    },
+    "/scenarios/{scenarioId}": {
+      "schema": { "$ref": "#/entities/Scenario" },
+      "description": "Curated engineering scenarios."
+    },
+    "/sessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/Session" },
+      "description": "Engineering practice sessions."
+    },
+    "/sessions/{sessionId}/participants/{participantUid}": {
+      "schema": { "$ref": "#/entities/SessionParticipant" },
+      "description": "Session participants subcollection."
+    },
+    "/sessions/{sessionId}/waitlist/{waitlistUid}": {
+      "schema": { "$ref": "#/entities/SessionWaitlist" },
+      "description": "Session waitlist subcollection."
+    },
+    "/sessions/{sessionId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/SessionMessage" },
+      "description": "Session discussion messages subcollection."
+    },
+    "/sessions/{sessionId}/events/{eventId}": {
+      "schema": { "$ref": "#/entities/SessionEvent" },
+      "description": "Session interaction events subcollection."
+    },
+    "/users/{uid}/evaluations/{evaluationId}": {
+      "schema": { "$ref": "#/entities/UserEvaluation" },
+      "description": "Private AI evaluation reports per user."
+    },
+    "/users/{uid}/competencyObservations/{observationId}": {
+      "schema": { "$ref": "#/entities/CompetencyObservation" },
+      "description": "Dated competency evidence observations."
+    },
+    "/users/{uid}/arenaSessions/{arenaId}": {
+      "schema": { "$ref": "#/entities/ArenaSession" },
+      "description": "Private AI Practice Arena sessions."
+    },
+    "/users/{uid}/arenaSessions/{arenaId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/ArenaMessage" },
+      "description": "Messages inside a private AI Practice Arena session."
+    },
+    "/skillPassports/{uid}": {
+      "schema": { "$ref": "#/entities/SkillPassport" },
+      "description": "Opt-in shareable Developer Skill Passport."
+    },
+    "/userReports/{reportId}": {
+      "schema": { "$ref": "#/entities/UserReport" },
+      "description": "Safety and moderation reports."
+    },
+    "/auditEvents/{eventId}": {
+      "schema": { "$ref": "#/entities/AuditEvent" },
+      "description": "Append-only moderation and security audit records."
+    },
+    "/admins/{uid}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Privileged staff/admin membership records."
+    }
+  }
+}

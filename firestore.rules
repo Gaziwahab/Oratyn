@@ -1,0 +1,616 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pillar 0: Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Reusable Hardened Primitives ---
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return isVerifiedUser() && (
+        request.auth.token.email == 'gaziwahab58@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidStringArray(arr, maxLen, maxItemLen) {
+      return arr is list &&
+        arr.size() <= maxLen &&
+        (arr.size() == 0 || (arr[0] is string && arr[0].size() >= 1 && arr[0].size() <= maxItemLen));
+    }
+
+    // --- Validation Blueprints ---
+    function isValidUserProfile(data) {
+      return data.uid is string && data.uid == request.auth.uid && isValidId(data.uid) &&
+        data.displayName is string && data.displayName.size() >= 2 && data.displayName.size() <= 60 &&
+        data.experienceBand in ['student', 'beginner', 'junior', 'intermediate', 'advanced', 'prefer_not_to_say'] &&
+        data.accountStatus in ['active', 'restricted', 'suspended', 'pending_deletion'] &&
+        data.onboardingCompleted is bool &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidPublicProfile(data) {
+      return data.uid is string && data.uid == request.auth.uid && isValidId(data.uid) &&
+        data.displayName is string && data.displayName.size() >= 2 && data.displayName.size() <= 60 &&
+        data.bio is string && data.bio.size() <= 280 &&
+        isValidStringArray(data.interests, 10, 40) &&
+        data.visibility in ['private', 'community'] &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidUserPreferences(data) {
+      return data.uid is string && data.uid == request.auth.uid && isValidId(data.uid) &&
+        isValidStringArray(data.goals, 7, 40) &&
+        isValidStringArray(data.interests, 10, 40) &&
+        data.preferredDifficulty in ['beginner', 'intermediate', 'advanced'] &&
+        data.notificationsEnabled is bool &&
+        (!('dismissedScenarioIds' in data) || isValidStringArray(data.dismissedScenarioIds, 30, 128)) &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidUserBlock(data, ownerUid, blockedUid) {
+      return data.ownerUid is string && data.ownerUid == ownerUid && isValidId(ownerUid) &&
+        data.blockedUid is string && data.blockedUid == blockedUid && isValidId(blockedUid) &&
+        data.ownerUid != data.blockedUid &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidDomain(data) {
+      return data.id is string && isValidId(data.id) &&
+        data.slug is string && data.slug.size() >= 1 && data.slug.size() <= 128 &&
+        data.title is string && data.title.size() >= 2 && data.title.size() <= 120 &&
+        data.description is string && data.description.size() <= 500 &&
+        data.order is int && data.order >= 0 && data.order <= 100 &&
+        data.status in ['draft', 'published', 'archived'];
+    }
+
+    function isValidScenario(data) {
+      return data.id is string && isValidId(data.id) &&
+        data.slug is string && data.slug.size() >= 1 && data.slug.size() <= 128 &&
+        data.domainId is string && isValidId(data.domainId) &&
+        data.domainTitle is string && data.domainTitle.size() >= 2 && data.domainTitle.size() <= 120 &&
+        data.topicTitle is string && data.topicTitle.size() >= 2 && data.topicTitle.size() <= 120 &&
+        data.title is string && data.title.size() >= 4 && data.title.size() <= 200 &&
+        data.roomType in ['discussion', 'debate', 'system_design', 'debug', 'code_review', 'incident', 'teach'] &&
+        data.difficulty in ['beginner', 'intermediate', 'advanced'] &&
+        data.estimatedMinutes is int && data.estimatedMinutes >= 5 && data.estimatedMinutes <= 180 &&
+        data.participationMode in ['scheduled', 'async', 'both'] &&
+        data.context is string && data.context.size() >= 10 && data.context.size() <= 2000 &&
+        data.prompt is string && data.prompt.size() >= 10 && data.prompt.size() <= 2000 &&
+        isValidStringArray(data.constraints, 10, 400) &&
+        isValidStringArray(data.learningObjectives, 10, 400) &&
+        isValidStringArray(data.prerequisites, 10, 200) &&
+        isValidStringArray(data.competencies, 10, 100) &&
+        isValidStringArray(data.strongSignals, 10, 300) &&
+        data.rubricVersion is int && data.rubricVersion >= 1 && data.rubricVersion <= 100 &&
+        data.status in ['draft', 'published', 'archived'];
+    }
+
+    function isValidSession(data) {
+      return data.id is string && isValidId(data.id) &&
+        data.scenarioId is string && isValidId(data.scenarioId) &&
+        data.scenarioSlug is string && data.scenarioSlug.size() >= 1 && data.scenarioSlug.size() <= 128 &&
+        data.scenarioTitle is string && data.scenarioTitle.size() >= 4 && data.scenarioTitle.size() <= 200 &&
+        data.roomType in ['discussion', 'debate', 'system_design', 'debug', 'code_review', 'incident', 'teach'] &&
+        data.difficulty in ['beginner', 'intermediate', 'advanced'] &&
+        data.title is string && data.title.size() >= 4 && data.title.size() <= 120 &&
+        data.hostUid is string && isValidId(data.hostUid) &&
+        data.hostDisplayName is string && data.hostDisplayName.size() >= 2 && data.hostDisplayName.size() <= 60 &&
+        data.status in ['draft', 'open', 'scheduled', 'active', 'paused', 'completed', 'cancelled'] &&
+        data.participationMode in ['scheduled', 'async'] &&
+        data.visibility in ['public', 'private'] &&
+        data.capacity is int && data.capacity >= 2 && data.capacity <= 10 &&
+        data.participantCount is int && data.participantCount >= 0 && data.participantCount <= data.capacity &&
+        data.participantUids is list && data.participantUids.size() <= 10 &&
+        data.currentPhase in ['introduction', 'preparation', 'initial_contributions', 'cross_questioning', 'open_discussion', 'conclusion', 'evaluation_pending', 'evaluation_complete'] &&
+        data.phaseVersion is int && data.phaseVersion >= 1 &&
+        (data.activeTurnUid == null || (data.activeTurnUid is string && isValidId(data.activeTurnUid))) &&
+        data.sharedNotes is string && data.sharedNotes.size() <= 8000 &&
+        data.roomCapabilities is map &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidParticipant(data, sessionId, participantUid) {
+      return data.uid is string && data.uid == participantUid && isValidId(participantUid) &&
+        data.sessionId is string && data.sessionId == sessionId && isValidId(sessionId) &&
+        data.displayName is string && data.displayName.size() >= 2 && data.displayName.size() <= 60 &&
+        data.role in ['participant', 'host', 'moderator'] &&
+        data.status in ['joined', 'left', 'removed'] &&
+        data.joinedAt is timestamp;
+    }
+
+    function isValidWaitlistEntry(data, sessionId, waitlistUid) {
+      return data.uid is string && data.uid == waitlistUid && isValidId(waitlistUid) &&
+        data.sessionId is string && data.sessionId == sessionId && isValidId(sessionId) &&
+        data.displayName is string && data.displayName.size() >= 2 && data.displayName.size() <= 60 &&
+        data.joinedAt is timestamp;
+    }
+
+    function isValidMessage(data, sessionId) {
+      return data.id is string && isValidId(data.id) &&
+        data.sessionId is string && data.sessionId == sessionId && isValidId(sessionId) &&
+        data.senderUid is string && data.senderUid == request.auth.uid && isValidId(data.senderUid) &&
+        data.senderDisplayName is string && data.senderDisplayName.size() >= 2 && data.senderDisplayName.size() <= 60 &&
+        data.body is string && data.body.size() >= 1 && data.body.size() <= 4000 &&
+        data.messageType in ['text', 'code', 'system', 'pass'] &&
+        data.phase is string && data.phase.size() >= 1 && data.phase.size() <= 40 &&
+        (data.replyToMessageId == null || (data.replyToMessageId is string && isValidId(data.replyToMessageId))) &&
+        data.clientMessageId is string && isValidId(data.clientMessageId) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidSessionEvent(data, sessionId) {
+      return data.id is string && isValidId(data.id) &&
+        data.sessionId is string && data.sessionId == sessionId && isValidId(sessionId) &&
+        data.actorUid is string && data.actorUid == request.auth.uid && isValidId(data.actorUid) &&
+        data.eventType is string && data.eventType.size() >= 2 && data.eventType.size() <= 60 &&
+        data.summary is string && data.summary.size() >= 2 && data.summary.size() <= 300 &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidEvaluation(data, ownerUid) {
+      return data.id is string && isValidId(data.id) &&
+        data.uid is string && data.uid == ownerUid && isValidId(ownerUid) &&
+        data.sessionId is string && isValidId(data.sessionId) &&
+        data.scenarioId is string && isValidId(data.scenarioId) &&
+        data.scenarioTitle is string && data.scenarioTitle.size() >= 2 && data.scenarioTitle.size() <= 200 &&
+        data.rubricVersion is int && data.rubricVersion >= 1 &&
+        data.promptVersion is string && data.promptVersion.size() >= 1 && data.promptVersion.size() <= 40 &&
+        data.provider is string && data.provider.size() >= 1 && data.provider.size() <= 40 &&
+        data.model is string && data.model.size() >= 1 && data.model.size() <= 80 &&
+        data.status in ['pending', 'processing', 'completed', 'failed'] &&
+        data.flaggedForReview is bool &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidCompetencyObservation(data, ownerUid) {
+      return data.id is string && isValidId(data.id) &&
+        data.uid is string && data.uid == ownerUid && isValidId(ownerUid) &&
+        data.competencyKey is string && data.competencyKey.size() >= 2 && data.competencyKey.size() <= 100 &&
+        data.sessionId is string && isValidId(data.sessionId) &&
+        data.evaluationId is string && isValidId(data.evaluationId) &&
+        data.rating is int && data.rating >= 0 && data.rating <= 4 &&
+        data.confidence in ['low', 'medium', 'high'] &&
+        data.rubricVersion is int && data.rubricVersion >= 1 &&
+        data.observedAt is timestamp;
+    }
+
+    function isValidArenaSession(data, ownerUid, arenaId) {
+      return data.id is string && data.id == arenaId && isValidId(arenaId) &&
+        data.uid is string && data.uid == ownerUid && isValidId(ownerUid) &&
+        data.scenarioId is string && isValidId(data.scenarioId) &&
+        data.scenarioSlug is string && data.scenarioSlug.size() >= 1 && data.scenarioSlug.size() <= 128 &&
+        data.scenarioTitle is string && data.scenarioTitle.size() >= 2 && data.scenarioTitle.size() <= 200 &&
+        data.mode in ['mentor', 'interviewer', 'challenger', 'teach_back', 'multi_perspective'] &&
+        isValidStringArray(data.activePersonas, 4, 40) &&
+        data.status in ['active', 'completed'] &&
+        data.turnCount is int && data.turnCount >= 0 && data.turnCount <= 100 &&
+        data.coachingNotes is string && data.coachingNotes.size() <= 4000 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidArenaMessage(data, ownerUid, arenaId) {
+      return data.id is string && isValidId(data.id) &&
+        data.arenaId is string && data.arenaId == arenaId && isValidId(arenaId) &&
+        data.uid is string && data.uid == ownerUid && isValidId(ownerUid) &&
+        data.senderType in ['learner', 'ai'] &&
+        data.senderDisplayName is string && data.senderDisplayName.size() >= 2 && data.senderDisplayName.size() <= 80 &&
+        data.body is string && data.body.size() >= 1 && data.body.size() <= 4000 &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidSkillPassport(data, ownerUid) {
+      return data.uid is string && data.uid == ownerUid && isValidId(ownerUid) &&
+        data.displayName is string && data.displayName.size() >= 2 && data.displayName.size() <= 60 &&
+        data.headline is string && data.headline.size() <= 120 &&
+        data.bio is string && data.bio.size() <= 280 &&
+        data.experienceBand in ['student', 'beginner', 'junior', 'intermediate', 'advanced', 'prefer_not_to_say'] &&
+        data.visibility in ['private', 'community'] &&
+        data.completedSessionsCount is int && data.completedSessionsCount >= 0 &&
+        data.verifiedCompetencies is list && data.verifiedCompetencies.size() <= 20 &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidUserReport(data) {
+      return data.id is string && isValidId(data.id) &&
+        data.reporterUid is string && data.reporterUid == request.auth.uid && isValidId(data.reporterUid) &&
+        data.targetUid is string && isValidId(data.targetUid) &&
+        data.sessionId is string && isValidId(data.sessionId) &&
+        (data.messageId == null || (data.messageId is string && isValidId(data.messageId))) &&
+        data.category in ['harassment', 'spam', 'off_topic', 'pii_exposure', 'malicious_content', 'other'] &&
+        data.details is string && data.details.size() >= 5 && data.details.size() <= 1000 &&
+        data.status in ['open', 'under_review', 'resolved', 'dismissed'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidAuditEvent(data) {
+      return data.id is string && isValidId(data.id) &&
+        data.actorUid is string && isValidId(data.actorUid) &&
+        data.action is string && data.action.size() >= 2 && data.action.size() <= 100 &&
+        data.targetType is string && data.targetType.size() >= 2 && data.targetType.size() <= 60 &&
+        data.targetId is string && isValidId(data.targetId) &&
+        data.outcome in ['allowed', 'denied', 'succeeded', 'failed'] &&
+        data.createdAt is timestamp;
+    }
+
+    // --- Collection Rules ---
+
+    match /users/{uid} {
+      allow get: if isValidId(uid) && (isOwner(uid) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isVerifiedUser() && isValidId(uid) && isOwner(uid) &&
+        isValidUserProfile(incoming()) &&
+        incoming().keys().hasAll(['uid', 'displayName', 'experienceBand', 'accountStatus', 'onboardingCompleted', 'createdAt', 'updatedAt']) &&
+        incoming().keys().hasOnly(['uid', 'displayName', 'experienceBand', 'accountStatus', 'onboardingCompleted', 'createdAt', 'updatedAt']) &&
+        incoming().accountStatus == 'active' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser() && isValidId(uid) && isValidUserProfile(incoming()) && (
+        isAdmin() || (
+          isOwner(uid) &&
+          incoming().uid == existing().uid &&
+          incoming().createdAt == existing().createdAt &&
+          (
+            incoming().accountStatus == existing().accountStatus ||
+            incoming().accountStatus == 'pending_deletion'
+          ) &&
+          incoming().updatedAt == request.time &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'experienceBand', 'accountStatus', 'onboardingCompleted', 'updatedAt'])
+        )
+      );
+
+      match /evaluations/{evaluationId} {
+        allow get: if isValidId(uid) && isValidId(evaluationId) && (isOwner(uid) || isAdmin());
+        allow list: if isSignedIn() && resource.data.uid == request.auth.uid;
+        allow create: if isVerifiedUser() && isValidId(uid) && isValidId(evaluationId) && isOwner(uid) &&
+          isValidEvaluation(incoming(), uid) &&
+          incoming().flaggedForReview == false &&
+          incoming().createdAt == request.time &&
+          (
+            exists(/databases/$(database)/documents/sessions/$(incoming().sessionId)/participants/$(uid)) ||
+            exists(/databases/$(database)/documents/users/$(uid)/arenaSessions/$(incoming().sessionId))
+          );
+        allow update: if isVerifiedUser() && isValidId(uid) && isValidId(evaluationId) &&
+          isValidEvaluation(incoming(), uid) &&
+          isOwner(uid) &&
+          incoming().uid == existing().uid &&
+          incoming().sessionId == existing().sessionId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['feedbackUseful', 'flaggedForReview', 'flagReason']);
+      }
+
+      match /competencyObservations/{observationId} {
+        allow get: if isValidId(uid) && isValidId(observationId) && (isOwner(uid) || isAdmin());
+        allow list: if isSignedIn() && resource.data.uid == request.auth.uid;
+        allow create: if isVerifiedUser() && isValidId(uid) && isValidId(observationId) && isOwner(uid) &&
+          isValidCompetencyObservation(incoming(), uid) &&
+          incoming().observedAt == request.time &&
+          (
+            exists(/databases/$(database)/documents/sessions/$(incoming().sessionId)/participants/$(uid)) ||
+            exists(/databases/$(database)/documents/users/$(uid)/arenaSessions/$(incoming().sessionId))
+          );
+      }
+
+      match /arenaSessions/{arenaId} {
+        allow get: if isValidId(uid) && isValidId(arenaId) && (isOwner(uid) || isAdmin());
+        allow list: if isSignedIn() && resource.data.uid == request.auth.uid;
+        allow create: if isVerifiedUser() && isValidId(uid) && isValidId(arenaId) && isOwner(uid) &&
+          isValidArenaSession(incoming(), uid, arenaId) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time;
+        allow update: if isVerifiedUser() && isValidId(uid) && isValidId(arenaId) && isOwner(uid) &&
+          isValidArenaSession(incoming(), uid, arenaId) &&
+          incoming().uid == existing().uid &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time;
+
+        match /messages/{messageId} {
+          allow get: if isValidId(uid) && isValidId(arenaId) && isValidId(messageId) && (isOwner(uid) || isAdmin());
+          allow list: if isSignedIn() && resource.data.uid == request.auth.uid;
+          allow create: if isVerifiedUser() && isValidId(uid) && isValidId(arenaId) && isValidId(messageId) &&
+            isOwner(uid) &&
+            isValidArenaMessage(incoming(), uid, arenaId) &&
+            incoming().createdAt == request.time;
+        }
+      }
+    }
+
+    match /publicProfiles/{uid} {
+      allow get: if isValidId(uid) && isSignedIn() && (existing().visibility == 'community' || isOwner(uid) || isAdmin());
+      allow list: if isSignedIn() && (resource.data.visibility == 'community' || resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if isVerifiedUser() && isValidId(uid) && isOwner(uid) &&
+        isValidPublicProfile(incoming()) &&
+        incoming().keys().hasAll(['uid', 'displayName', 'bio', 'interests', 'visibility', 'updatedAt']) &&
+        incoming().keys().hasOnly(['uid', 'displayName', 'bio', 'interests', 'visibility', 'updatedAt']) &&
+        incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser() && isValidId(uid) && isOwner(uid) &&
+        isValidPublicProfile(incoming()) &&
+        incoming().uid == existing().uid &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'bio', 'interests', 'visibility', 'updatedAt']);
+    }
+
+    match /skillPassports/{uid} {
+      allow get: if isValidId(uid) && isSignedIn() && (existing().visibility == 'community' || isOwner(uid) || isAdmin());
+      allow list: if isSignedIn() && (resource.data.visibility == 'community' || resource.data.uid == request.auth.uid || isAdmin());
+      allow create, update: if isVerifiedUser() && isValidId(uid) && isOwner(uid) &&
+        isValidSkillPassport(incoming(), uid) &&
+        incoming().updatedAt == request.time;
+    }
+
+    match /userPreferences/{uid} {
+      allow get: if isValidId(uid) && (isOwner(uid) || isAdmin());
+      allow create: if isVerifiedUser() && isValidId(uid) && isOwner(uid) &&
+        isValidUserPreferences(incoming()) &&
+        incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser() && isValidId(uid) && isOwner(uid) &&
+        isValidUserPreferences(incoming()) &&
+        incoming().uid == existing().uid &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['goals', 'interests', 'preferredDifficulty', 'notificationsEnabled', 'dismissedScenarioIds', 'updatedAt']);
+    }
+
+    match /userBlocks/{uid}/blockedUsers/{blockedUid} {
+      allow get: if isValidId(uid) && isValidId(blockedUid) && isOwner(uid);
+      allow list: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
+      allow create: if isVerifiedUser() && isValidId(uid) && isValidId(blockedUid) && isOwner(uid) &&
+        isValidUserBlock(incoming(), uid, blockedUid) &&
+        incoming().keys().hasAll(['ownerUid', 'blockedUid', 'createdAt']) &&
+        incoming().keys().hasOnly(['ownerUid', 'blockedUid', 'createdAt']) &&
+        incoming().createdAt == request.time;
+      allow delete: if isVerifiedUser() && isValidId(uid) && isValidId(blockedUid) && isOwner(uid);
+    }
+
+    match /domains/{domainId} {
+      allow get: if isValidId(domainId) && isSignedIn() && (existing().status == 'published' || isAdmin());
+      allow list: if isSignedIn() && (resource.data.status == 'published' || isAdmin());
+      allow create, update: if isAdmin() && isValidId(domainId) && isValidDomain(incoming());
+    }
+
+    match /scenarios/{scenarioId} {
+      allow get: if isValidId(scenarioId) && isSignedIn() && (existing().status == 'published' || isAdmin());
+      allow list: if isSignedIn() && (resource.data.status == 'published' || isAdmin());
+      allow create, update: if isAdmin() && isValidId(scenarioId) && isValidScenario(incoming());
+    }
+
+    match /sessions/{sessionId} {
+      allow get: if isValidId(sessionId) && isSignedIn() && (
+        existing().visibility == 'public' ||
+        existing().hostUid == request.auth.uid ||
+        request.auth.uid in existing().participantUids ||
+        exists(/databases/$(database)/documents/sessions/$(sessionId)/participants/$(request.auth.uid)) ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        resource.data.visibility == 'public' ||
+        resource.data.hostUid == request.auth.uid ||
+        request.auth.uid in resource.data.participantUids ||
+        isAdmin()
+      );
+
+      allow create: if isVerifiedUser() && isValidId(sessionId) &&
+        isValidSession(incoming()) &&
+        incoming().id == sessionId &&
+        incoming().hostUid == request.auth.uid &&
+        incoming().status in ['open', 'scheduled', 'active'] &&
+        incoming().participantCount == 1 &&
+        incoming().participantUids.size() == 1 &&
+        incoming().participantUids[0] == request.auth.uid &&
+        incoming().currentPhase in ['introduction', 'initial_contributions'] &&
+        incoming().phaseVersion == 1 &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+
+      allow update: if isVerifiedUser() && isValidId(sessionId) &&
+        isValidSession(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().scenarioId == existing().scenarioId &&
+        incoming().hostUid == existing().hostUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          isAdmin() ||
+          (
+            // Terminal state lock: completed/cancelled sessions cannot be mutated by non-admins
+            !(existing().status in ['completed', 'cancelled']) &&
+            (
+              // Action 1: Participant join (atomic with participant subcollection doc)
+              (
+                !(request.auth.uid in existing().participantUids) &&
+                existing().status in ['open', 'scheduled', 'active'] &&
+                existing().participantCount < existing().capacity &&
+                incoming().participantCount == existing().participantCount + 1 &&
+                request.auth.uid in incoming().participantUids &&
+                incoming().participantUids.hasAll(existing().participantUids) &&
+                incoming().diff(existing()).affectedKeys().hasOnly(['participantCount', 'participantUids', 'updatedAt']) &&
+                existsAfter(/databases/$(database)/documents/sessions/$(sessionId)/participants/$(request.auth.uid))
+              ) ||
+              // Action 2: Participant leave (auto-completes session when participantCount drops to 0)
+              (
+                request.auth.uid in existing().participantUids &&
+                !(request.auth.uid in incoming().participantUids) &&
+                incoming().participantCount == existing().participantCount - 1 &&
+                incoming().diff(existing()).affectedKeys().hasOnly(['participantCount', 'participantUids', 'status', 'currentPhase', 'phaseVersion', 'activeTurnUid', 'completedAtMs', 'updatedAt'])
+              ) ||
+              // Action 3: Joined participant updates shared scratchpad/lab notes, room capabilities, or passes turn
+              (
+                request.auth.uid in existing().participantUids &&
+                incoming().diff(existing()).affectedKeys().hasOnly(['status', 'sharedNotes', 'activeTurnUid', 'roomCapabilities', 'updatedAt'])
+              ) ||
+              // Action 4: Host manages lifecycle, phases, turn guidance, and participant removal
+              (
+                existing().hostUid == request.auth.uid &&
+                incoming().diff(existing()).affectedKeys().hasOnly(['status', 'currentPhase', 'phaseVersion', 'activeTurnUid', 'roomCapabilities', 'participantCount', 'participantUids', 'completedAtMs', 'updatedAt'])
+              )
+            )
+          )
+        );
+
+      match /participants/{participantUid} {
+        allow get: if isValidId(sessionId) && isValidId(participantUid) && isSignedIn() && (
+          participantUid == request.auth.uid ||
+          request.auth.uid in get(/databases/$(database)/documents/sessions/$(sessionId)).data.participantUids ||
+          get(/databases/$(database)/documents/sessions/$(sessionId)).data.visibility == 'public' ||
+          isAdmin()
+        );
+        allow list: if isSignedIn() && (
+          request.auth.uid in get(/databases/$(database)/documents/sessions/$(sessionId)).data.participantUids ||
+          get(/databases/$(database)/documents/sessions/$(sessionId)).data.visibility == 'public' ||
+          isAdmin()
+        );
+        allow create: if isVerifiedUser() && isValidId(sessionId) && isValidId(participantUid) &&
+          participantUid == request.auth.uid &&
+          isValidParticipant(incoming(), sessionId, participantUid) &&
+          incoming().joinedAt == request.time &&
+          (
+            incoming().role == 'participant' ||
+            (incoming().role == 'host' && getAfter(/databases/$(database)/documents/sessions/$(sessionId)).data.hostUid == request.auth.uid)
+          );
+        allow update: if isVerifiedUser() && isValidId(sessionId) && isValidId(participantUid) &&
+          isValidParticipant(incoming(), sessionId, participantUid) &&
+          incoming().uid == existing().uid &&
+          incoming().sessionId == existing().sessionId &&
+          incoming().joinedAt == existing().joinedAt &&
+          (
+            isAdmin() ||
+            (
+              participantUid == request.auth.uid &&
+              incoming().role == existing().role &&
+              incoming().status in ['joined', 'left'] &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['status', 'leftAtMs', 'micEnabled', 'camEnabled', 'mediaMode', 'mediaConsentGranted'])
+            ) ||
+            (
+              get(/databases/$(database)/documents/sessions/$(sessionId)).data.hostUid == request.auth.uid &&
+              incoming().diff(existing()).affectedKeys().hasOnly(['status', 'leftAtMs'])
+            )
+          );
+      }
+
+      match /waitlist/{waitlistUid} {
+        allow get, list: if isSignedIn();
+        allow create: if isVerifiedUser() && isValidId(sessionId) && isValidId(waitlistUid) &&
+          waitlistUid == request.auth.uid &&
+          isValidWaitlistEntry(incoming(), sessionId, waitlistUid) &&
+          incoming().joinedAt == request.time;
+        allow delete: if isVerifiedUser() && isValidId(sessionId) && isValidId(waitlistUid) &&
+          (waitlistUid == request.auth.uid || isAdmin());
+      }
+
+      match /messages/{messageId} {
+        allow get: if isValidId(sessionId) && isValidId(messageId) && isSignedIn() && (
+          request.auth.uid in get(/databases/$(database)/documents/sessions/$(sessionId)).data.participantUids ||
+          get(/databases/$(database)/documents/sessions/$(sessionId)).data.hostUid == request.auth.uid ||
+          get(/databases/$(database)/documents/sessions/$(sessionId)).data.visibility == 'public' ||
+          exists(/databases/$(database)/documents/sessions/$(sessionId)/participants/$(request.auth.uid)) ||
+          isAdmin()
+        );
+        allow list: if isSignedIn() && (
+          request.auth.uid in get(/databases/$(database)/documents/sessions/$(sessionId)).data.participantUids ||
+          get(/databases/$(database)/documents/sessions/$(sessionId)).data.hostUid == request.auth.uid ||
+          get(/databases/$(database)/documents/sessions/$(sessionId)).data.visibility == 'public' ||
+          exists(/databases/$(database)/documents/sessions/$(sessionId)/participants/$(request.auth.uid)) ||
+          isAdmin()
+        );
+        allow create: if isVerifiedUser() && isValidId(sessionId) && isValidId(messageId) &&
+          isValidMessage(incoming(), sessionId) &&
+          incoming().createdAt == request.time &&
+          get(/databases/$(database)/documents/sessions/$(sessionId)).data.status in ['open', 'scheduled', 'active'] &&
+          request.auth.uid in get(/databases/$(database)/documents/sessions/$(sessionId)).data.participantUids;
+      }
+
+      match /events/{eventId} {
+        allow get: if isValidId(sessionId) && isValidId(eventId) && isSignedIn() && (
+          request.auth.uid in get(/databases/$(database)/documents/sessions/$(sessionId)).data.participantUids ||
+          get(/databases/$(database)/documents/sessions/$(sessionId)).data.hostUid == request.auth.uid ||
+          get(/databases/$(database)/documents/sessions/$(sessionId)).data.visibility == 'public' ||
+          exists(/databases/$(database)/documents/sessions/$(sessionId)/participants/$(request.auth.uid)) ||
+          isAdmin()
+        );
+        allow list: if isSignedIn() && (
+          request.auth.uid in get(/databases/$(database)/documents/sessions/$(sessionId)).data.participantUids ||
+          get(/databases/$(database)/documents/sessions/$(sessionId)).data.hostUid == request.auth.uid ||
+          get(/databases/$(database)/documents/sessions/$(sessionId)).data.visibility == 'public' ||
+          exists(/databases/$(database)/documents/sessions/$(sessionId)/participants/$(request.auth.uid)) ||
+          isAdmin()
+        );
+        allow create: if isVerifiedUser() && isValidId(sessionId) && isValidId(eventId) &&
+          isValidSessionEvent(incoming(), sessionId) &&
+          incoming().createdAt == request.time &&
+          (
+            request.auth.uid in getAfter(/databases/$(database)/documents/sessions/$(sessionId)).data.participantUids ||
+            request.auth.uid in get(/databases/$(database)/documents/sessions/$(sessionId)).data.participantUids ||
+            exists(/databases/$(database)/documents/sessions/$(sessionId)/participants/$(request.auth.uid))
+          );
+      }
+    }
+
+    function isValidUserReportBody(data) {
+      return data.id is string && isValidId(data.id) &&
+        data.reporterUid is string && isValidId(data.reporterUid) &&
+        data.targetUid is string && isValidId(data.targetUid) &&
+        data.sessionId is string && isValidId(data.sessionId) &&
+        (data.messageId == null || (data.messageId is string && isValidId(data.messageId))) &&
+        data.category in ['harassment', 'spam', 'off_topic', 'pii_exposure', 'malicious_content', 'other'] &&
+        data.details is string && data.details.size() >= 5 && data.details.size() <= 1000 &&
+        data.status in ['open', 'under_review', 'resolved', 'dismissed'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    match /userReports/{reportId} {
+      allow get: if isValidId(reportId) && isSignedIn() && (existing().reporterUid == request.auth.uid || isAdmin());
+      allow list: if isAdmin() || (isSignedIn() && resource.data.reporterUid == request.auth.uid);
+      allow create: if isVerifiedUser() && isValidId(reportId) &&
+        isValidUserReport(incoming()) &&
+        incoming().status == 'open' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isAdmin() && isValidId(reportId) &&
+        isValidUserReportBody(incoming()) &&
+        incoming().reporterUid == existing().reporterUid &&
+        incoming().targetUid == existing().targetUid &&
+        incoming().sessionId == existing().sessionId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time;
+    }
+
+    match /auditEvents/{eventId} {
+      allow get, list: if isAdmin();
+      allow create: if isAdmin() && isValidId(eventId) && isValidAuditEvent(incoming()) && incoming().createdAt == request.time;
+    }
+
+    match /admins/{uid} {
+      allow get: if isValidId(uid) && (isOwner(uid) || isAdmin());
+      allow list: if isAdmin();
+    }
+  }
+}

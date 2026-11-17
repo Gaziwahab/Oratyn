@@ -1,0 +1,6 @@
+{
+  "name": "Engineering Practice Platform",
+  "description": "Structured engineering discussions, realistic system scenarios, and evidence-based AI feedback for software developers.",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
